@@ -15,12 +15,27 @@ const MODEL_STATUS_CACHE_TTL_MS = 10 * 60 * 1000;
 let modelStatusCache = null;
 let modelStatusCacheAt = 0;
 
+function getAllowedOrigins() {
+  const fromEnv = (process.env.FRONTEND_URLS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return new Set([
+    ...fromEnv,
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ]);
+}
+
 const corsOptions = {
   origin(origin, callback) {
     if (!origin) return callback(null, true);
 
-    const allowed = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
-    if (allowed) return callback(null, true);
+    const allowedOrigins = getAllowedOrigins();
+    if (allowedOrigins.has(origin)) return callback(null, true);
 
     return callback(new Error(`Not allowed by CORS: ${origin}`));
   },

@@ -55,6 +55,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 90000) {
   }
 }
 
+  function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
 export default function App() {
   const apiBase = import.meta.env.VITE_API_BASE ?? "http://localhost:3000";
   const apiBaseIsLocalhost = /localhost|127\.0\.0\.1/i.test(apiBase);
@@ -194,7 +198,22 @@ export default function App() {
       generateOne({ width, height, index })
     );
 
-    await Promise.allSettled(tasks);
+      const allTasks = Promise.allSettled(tasks);
+
+      // UI-level watchdog: guarantees we leave "Generating..." even if one request gets stuck.
+      await Promise.race([allTasks, wait(95000)]);
+
+      setImages((prev) =>
+        prev.map((img) =>
+          img.status === "loading"
+            ? {
+                status: "error",
+                error: "Generation timed out. Please retry.",
+              }
+            : img
+        )
+      );
+
     setIsGenerating(false);
   };
 

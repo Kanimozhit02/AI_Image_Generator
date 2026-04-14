@@ -137,6 +137,7 @@ app.post("/api/generate", async (req, res) => {
         method: "POST",
         headers: getBaseHeaders(),
         body: payload,
+        signal: AbortSignal.timeout(60000),
       }
     );
 
@@ -164,6 +165,12 @@ app.post("/api/generate", async (req, res) => {
     res.setHeader("Content-Type", "image/png");
     res.send(buf);
   } catch (e) {
+    if (e?.name === "TimeoutError") {
+      return res.status(504).json({
+        error: "Image generation timed out at upstream provider. Please retry.",
+      });
+    }
+
     res.status(500).json({ error: String(e) });
   }
 });

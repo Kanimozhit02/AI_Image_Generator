@@ -41,8 +41,26 @@ function downloadBlobUrl(blobUrl, filename = "image.png") {
   a.remove();
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 90000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export default function App() {
   const apiBase = import.meta.env.VITE_API_BASE ?? "http://localhost:3000";
+  const apiBaseIsLocalhost = /localhost|127\.0\.0\.1/i.test(apiBase);
+  const isDeployedSite =
+    typeof window !== "undefined" &&
+    !/localhost|127\.0\.0\.1/i.test(window.location.hostname);
 
   const [dark, setDark] = useState(false);
   const [modelOptions, setModelOptions] = useState(
@@ -114,7 +132,7 @@ export default function App() {
 
   const generateOne = async ({ width, height, index }) => {
     try {
-      const resp = await fetch(`${apiBase}/api/generate`, {
+      const resp = await fetchWithTimeout(`${apiBase}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -123,7 +141,7 @@ export default function App() {
           width,
           height,
         }),
-      });
+      }, 90000);
 
       if (!resp.ok) {
         const err = await resp.text();
@@ -139,9 +157,14 @@ export default function App() {
         return next;
       });
     } catch (e) {
+      const message =
+        e?.name === "AbortError"
+          ? "Request timed out. Please try again in a few seconds."
+          : String(e);
+
       setImages((prev) => {
         const next = [...prev];
-        next[index] = { status: "error", error: String(e) };
+        next[index] = { status: "error", error: message };
         return next;
       });
     }
@@ -191,6 +214,12 @@ export default function App() {
       </header>
 
       <div className="main-content">
+        {isDeployedSite && apiBaseIsLocalhost && (
+          <p style={{ marginBottom: "12px", color: "#ef4444", fontWeight: 600 }}>
+            VITE_API_BASE is still pointing to localhost. Update it in Vercel environment variables.
+          </p>
+        )}
+
         <form className="prompt-form" onSubmit={onSubmit}>
           <div className="prompt-container">
             <textarea
@@ -288,7 +317,7 @@ export default function App() {
                       {img.status === "loading"
                         ? "Generating..."
                         : img.status === "error"
-                          ? "Generation failed! Check console."
+                          ? (img.error ?? "Generation failed")
                           : ""}
                     </p>
                   </div>
